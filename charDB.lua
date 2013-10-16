@@ -233,32 +233,3 @@ repeat
 until endgame==true
 prt("the end")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
