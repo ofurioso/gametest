@@ -1,0 +1,303 @@
+--A half-arsed OOP asproach to handling the mapinfo
+if (numdirections==nil) then
+numdirections=4 end
+if (sep==nil) then
+sep=";" end
+if (nothing==nil) then
+nothing="x" end
+
+if mapstruct==nil then
+   mapstruct={"north","east","south","west","name","bot"}
+   oppdir={}
+   oppdir[1]=3
+   oppdir[2]=4
+   oppdir[3]=1
+   oppdir[4]=2
+end
+mst={} --this will be an easy(?) way to get the index of the stat
+mapblank={}
+dirtocom={} --used to translate numerical directions to single letter commands
+pathcommands={} --used to translate single letter commands to numerical directions
+for lookup,stat in pairs(mapstruct) do
+   --print(lookup,"=",stat) --debug
+   mst[stat]=lookup
+   local command=string.sub(mapstruct[lookup],1,1)
+   if (lookup<=numdirections) then
+      dirtocom[lookup]=command
+      pathcommands[command]=lookup
+   end
+   mapblank[stat]=nothing
+end
+mapblank["name"]="blank"
+mapblank["bot"]=nothing
+for i,stat in pairs(mapstruct) do
+   if i==1 then
+      blanksection=mapblank[stat]
+   else
+      blanksection=blanksection..sep..mapblank[stat]
+   end
+end
+--print(blanksection) --debug
+
+mapDB={blanksection}
+
+if gametools==nil then
+gametools=require "gameDBtools" end
+
+function checkID(id)
+   --func to verify id isn't nil
+   --if it is we'll assume it's thissection, if there is no thissection, well, you've got bigger problems
+   local thisid=thissection.sectionid
+   local verfID
+   if (id==nil) then
+      if (thisid~=nil) then
+         print("ID is nil, assuming",thisid)
+         verfID=thisid
+      else
+         verfID=0
+         print("ID is nil and no sectionid")
+      end
+   else verfID=id
+   end
+   return verfID
+end
+
+function getdir(num,id)
+   --a tool for extracting direction info
+   id=checkID(id)
+   local d=stringget(mapDB[id],num,sep)
+   if d==nil or d== nothing then
+      d=nothing
+else d=tonumber(d) end
+   return d
+end
+
+function setdir(which,what,id)
+   --a tool for inserting direction info
+   --print("Inside setdir")
+   id=checkID(id)
+   d=mapDB[id]
+   --print("d =",d)
+   --display=string.format("Setting %s for %s to %s",dirtocom[which],id,what)
+   --print(display) --debug
+   mapDB[id]=stringput(d,which,what,sep)
+end
+
+function getname(id)
+   --a tool for fetching the name
+   id=checkID(id)
+   local nameloc=mst["name"]
+   local d=stringget(mapDB[id],nameloc,sep)
+   if d~=nil then d="Blank" end
+   return d
+end
+
+function setname(what,id)
+   --a tool for setting the section name
+   id=checkID(id)
+   local nameloc=mst["name"]
+   local d=mapDB[id]
+   display=string.format("Setting name of %s to %s",id,what)
+   print(display) --debug
+   mapDB[id]=stringput(d,mst["name"],what,sep)
+end
+
+function getmapbot(id)
+   --a tool for fetching bots from the map
+   id=checkID(id)
+   local botloc=mst["bot"]
+   local d=stringget(mapDB[id],botloc,sep)
+   if d==nil or d==nothing then
+      d=nothing
+   else
+      d=tonumber(d)
+   end
+   --print(botDB[d]) --debug
+   return d
+end
+
+function setmapbot(mapid,botid)
+   --a tool for inserting a bot into the map
+   if (botid~=nothing) then
+      id=checkID(id)
+   end
+   d=mapDB[mapid]
+   local botloc=mst["bot"]
+   display=string.format("Placing bot %s into %s",botid,mapid)--debug
+   print(display) --debug
+   mapDB[mapid]=stringput(d,botloc,botid,sep)
+end
+
+function gotosection(sec)
+   --fetches section sec and makes it local
+   local i,direction
+   --print("gotosection:",sec) --debug
+   if mapDB[sec]~=nil then
+      for i=1,numdirections do
+         thissection[i]=getdir(i,sec)
+         --print(dirtocom[i],"=",thissection[i])
+      end
+      thissection.sectionid=sec
+      thissection.name=getname(sec)
+      thissection.bot=getmapbot(sec)
+   end
+end
+
+function getvalidpaths(pattern,id)
+   --pattern is "blank" or "number" and will look at thissection values to return a table of only those directions that match the pattern
+   id=checkID(id)
+   if pattern==nil then
+      print("No pattern requested for getvalidpaths. Valid patterns are blank and number")
+      pattern="number"
+   end
+   if id==nil then
+   id=thissection.sectionid end
+   local vpaths={}
+   for i=1,numdirections do
+      check=getdir(i,id)
+      if (pattern=="blank" and (check=="x" or check==nil)) then
+         table.insert(vpaths,i)
+      else if  (pattern=="number" and type(check)=="number") then
+            -- assuming we're looking for numbers, check whether it's a number
+            table.insert(vpaths,i)
+         end
+      end
+   end
+   return vpaths
+end
+
+function listmap()
+   -- a debug function for displaying a listing out of all the sections
+   local i,text
+   local display="\nMaps\n"
+   local maps=""
+   for i,text in pairs(mapDB) do
+      maps=maps..string.format("%s  %s\n",i,text)
+   end
+   displaythis(display..maps)
+end
+
+function makeanewsection()
+   --creates a new section and figures out what sections are in which directions
+   --print("Making a new section")
+   local i,newdir
+
+   local function setblanksection(dir)
+      --print("Inside setblanksection")
+      local newsecid=(#mapDB+1)
+      local reversedir=oppdir[dir]
+      --print(string.format("Setting up %s to the %s of %s",newsecid,dirtocom[dir],thissection.sectionid)) --debug
+      table.insert(mapDB,blanksection)
+      setdir(reversedir,thissection.sectionid,newsecid)
+      --this is how we got here
+      setdir(dir,newsecid,thissection.sectionid)
+      --and that one is in thissection[direction]
+   end --function
+
+   local goodpaths=getvalidpaths("blank",thissection.sectionid)
+   --print("Finding valid blank paths:")
+   --print(table.concat(goodpaths,sep))
+   --if goodpaths==nil then
+   for i=1,#goodpaths do
+      sectionsyettomake=totalsections-#mapDB
+      if rollD(6)>3 then
+         --I suspect the problem I am getting comes from the die roll here. If it doesn't go perfectly, those new sections don't get made properly
+         --print("Aha! French. Champagne...") --debug
+         if (sectionsyettomake>0) then
+            newdir=goodpaths[i]
+            setblanksection(newdir)
+         end --if there are more sections yet tomake
+      end --chance to make a new section
+   end --goodpaths loop
+end
+--showsection() --debug
+--end --goodpaths not nil
+
+function createmap()
+   if (thissection==nil) then
+      initializethissection()
+   end
+   print("Creating map")--debug
+   local i=1
+   setname("Home",1)
+   makeanewsection()
+   --listmap() --debug
+   while (#mapDB<totalsections) do
+      displaythis(string.format("Creating section: %d\n",i)) --debug
+      i=i+1
+      gotosection(i)
+      --listmap() --debug
+      makeanewsection()
+   end
+end
+
+function initializethissection()
+   print("Initializing thissection")
+   local n
+   thissection={}
+   for n=1,numdirections do
+      thissection[n]=nothing
+   end
+   thissection.sectionid=1
+   thissection.name="Home"
+   thissection.bot=nothing
+end
+
+function oppositedir(indir)
+   --given a direction returns the opposite,
+   -- how to make a u-turn or where you came from.
+   --ideally this would be more generalized/algorithmic
+   local oppdir
+   if (indir==mapstruct.north) then
+      oppdir=mapstruct.south
+   else if (indir==mapstruct.east) then
+         oppdir=mapstruct.west
+      else if (indir==mapstruct.south) then
+            oppdir=mapstruct.north
+         else if (indir==mapstruct.west) then
+               oppdir=mapstruct.east
+            end
+         end
+      end
+   end
+   return oppdir
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
