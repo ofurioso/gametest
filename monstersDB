@@ -1,0 +1,372 @@
+if BaseSys==nil then
+BaseSys=100 end
+--the maximum difficulty of anything
+if sep==nil then
+sep=";" end
+
+if gametools==nil then
+gametools=require "gameDBtools" end
+if bonustools==nil then
+bonustools=require "bonusDB" end
+
+if handicap==nil then --wusses out the bots
+handicap= 1 end
+
+if totalbots==nil then
+totalbots=12 end
+--how many monsters are in the game
+if bottypes==nil then
+bottypes=7 end
+--how many kinds of monsters are there
+if botdifgradient==nil then
+botdifgradient=.1 end
+--a weird thing which is how much more difficult the next monster is compared to the previous one. 0 is flat, larger numbers will make bots/monsters very difficult. I reccomend 0-2
+
+if entitystruct==nil then
+   entitystruct={"name","hp","attack","defense","escape","bonus","gold"}
+end
+st={} --this will be an easy(?) way to get the index of the stat
+blankentity={}
+for lookup,stat in pairs(entitystruct) do
+   --print(stat,lookup) --debug
+   st[stat]=lookup -- where to find that stat in the string. It's important.
+   if stat=="name" then
+      blankentity[stat]="blank"
+   else
+      blankentity[stat]=0
+   end
+   --print(stat,">",blankentity[stat])--debug
+end
+blankbot=""
+for i,stat in pairs(entitystruct) do
+   --print(i,stat) --debug
+   if i==1 then
+      blankbot=blankentity[stat]
+   else
+      blankbot=blankbot..sep..blankentity[stat]
+   end
+end
+
+--Bot: name, HP, ATK, DEF, Bonus, GOLD
+
+botDB={} --stores the actual bots/monsters in game
+bottypeDB={} -- stores the archetype of those bots/monsters
+
+names={"minion","ghoul","leonard","demon"}
+
+function checkID(id)
+   --func to verify id isn't nil
+   --if it is we'll assume it's thissection, if there is no thissection, well, you've got bigger problems
+   local thisid=0
+   local verfID
+   if (id==nil) then
+      if (thisid~=nil) then
+         verfID=thisid
+      else
+         verfID=0
+         print("ID is nil and no sectionid")
+      end
+   else verfID=id
+   end
+   return verfID
+end
+
+function getbotstat(id, stat)
+   id=checkID(id)
+   --print("getbotstat is getting",stat,"from",botDB[id]) --debug
+   local n
+   local d=botDB[id]
+   if (d==nil) then
+      print(id,"is not a valid bot id") --error
+   else --lookup is not nil
+      n=statconvert(stat)
+      --n=stat --debug
+      stattoreturn= stringget(d,n)
+      --print("getting",st[stat],"from",botDB[id],"yields",stattoreturn) --debug
+      if n~=st.name then
+         stattoreturn=tonumber(stattoreturn)
+      end
+      return stattoreturn
+   end
+end
+
+function setbotstat(id, stattoset, what)
+   id=checkID(id)
+   local n
+   local d=botDB[id]
+   if (d==nil) then
+      print(id,"is not a valid bot id") --error
+   else --lookup is not nil
+      n=statconvert(stattoset)
+      if n~=nil then
+         botDB[id]=stringput(d,n,what,sep)
+      end
+   end
+end
+
+function getbotname(id)
+   local name
+   name=getbotstat(id,"name")
+   return name
+end
+
+function getbottable(id)
+   --returns a table of the specified bot indexed by stat
+   --print("getbottable looking up", id) --debug
+   --print("bot raw=",botDB[id]) --debug
+   local tempbot={}
+   local namebot={}
+   if (botDB[id]~=nil) then
+      tempbot=stringtotable(botDB[id],sep)
+      for i,value in pairs(tempbot) do
+         statname=entitystruct[i]
+         if statname~="name" then
+            value=tonumber(value)
+         end
+         namebot[statname]=value
+      end
+      return namebot
+   else
+      print(id,"is not a valid bot id")
+   end
+end
+
+function statconvert(stattocheck)
+   -- function to ensure client is not attempting to set stupid things only returns the index of a stat
+   local n
+   --print("Now checking the shit out of",stattocheck)--debug
+   if (type(stattocheck)=="number") then
+      if stattocheck>0 and stattocheck<=#entitystruct then
+         n=math.floor(stattocheck)
+      else
+         print(stattocheck,"is out of range")
+      end --range check
+   else --it's not a number
+      n=st[stattocheck]
+      if n==nil then
+         print(stattocheck,"is not a valid stat") --error
+      end
+   end --number check
+   return n
+end
+
+function statchk(stat,max)
+   if max==nil then max=BaseSys end
+   if stat<0 then stat=0 end
+   if stat>max then stat=max end
+   stat=math.floor(stat)
+   return stat
+end
+
+--make the bot types
+function inventbots()
+   local  n=1
+   local bottext
+   while (n<=bottypes) do
+      bottext=names[rollD(#names)]..sep
+      mod=(BaseSys*botdifgradient*(n/bottypes))
+      local hp=statchk(handicap*rollD(BaseSys)+mod)
+      bottext=bottext..hp..sep
+      local attack=statchk(handicap*rollD(BaseSys)+mod)
+      bottext=bottext..attack..sep
+      local defense=statchk(handicap*(rollD(BaseSys)+mod)/2)
+      bottext=bottext..defense..sep
+      escape=statchk(handicap*(rollD(BaseSys)+mod)/2)
+      bottext=bottext..escape..sep
+      local bonus=rollD(#bonus)
+      bottext=bottext..bonus..sep
+      local gold=hp+attack+defense+escape
+      gold=gold+statchk(rollD(BaseSys)+mod)
+
+      bottext=bottext..gold
+      bottypeDB[n]=bottext
+      --print(n,bottypeDB[n]) --debug
+      n=n+1
+   end
+end
+
+--add bots
+function makeallbots()
+   local  n=1
+   while (n<=totalbots) do
+      botDB[n]=bottypeDB[rollD(#bottypeDB)]
+      --print(n,botDB[n])--debug
+      n=n+1
+   end
+end
+
+function displaybot(botid)
+   local bot=getbottable(botid)
+   local feedback=string.format("name: %s\n", bot.name)
+   feedback=feedback..string.format("H:%s A:%s D:%s\n",bot.hp,bot.attack,bot.defense)
+   displaythis(feedback)
+end
+
+function allbotsdead()
+   print("Checking whether all bots are dead...") --debug
+   flag=true
+   for i,bot in pairs(botDB) do
+      local hp=tonumber(getbotstat(i,"hp"))
+      if (hp>0) then
+         flag=false
+         break
+      end
+   end
+   return flag
+end
+
+function listbots() --debug
+   print("Bots:")
+   for botid,rawinfo in pairs(botDB) do
+      print(botid,rawinfo)
+   end
+end
+
+function testbots()
+   local abot={}
+   local botid
+   inventbots()
+   makeallbots()
+   listbots()
+   botid=rollD(#botDB)
+   abot=getbottable(botid)
+   print("Attack (via bottable)=",abot.attack)
+   print("Defense (via getbotstat)=",getbotstat(botid,"defense"))
+end
+
+testbots() --debug testing
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
