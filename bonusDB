@@ -1,0 +1,25 @@
+bonus={}
+bonus[0]="000" -- nothin' nada zip
+bonus[1]="000"
+bonus[2]="000"
+bonus[3]="000"
+bonus[4]="000"
+bonus[5]="100"
+bonus[6]="010"
+bonus[7]="110"
+bonus[8]="101"
+bonus[9]="111"
+
+function applybonus(bonusnum)
+   local feedback="Bonus? "
+   local healthmod=tonumber(string.sub(bonus[bonusnum],1,1))
+   local attackmod=tonumber(string.sub(bonus[bonusnum],2,2))
+   local defensemod=tonumber(string.sub(bonus[bonusnum],3,3))
+   player.hp=player.hp+healthmod
+   player.attack=player.attack+attackmod
+   player.defense=player.defense+defensemod
+   if (healthmod>0) then feedback=feedback.."You've increased your Health.\n" end
+   if (attackmod>0) then feedback=feedback.."You've increased your Attack.\n" end
+   if (defensemod>0) then feedback=feedback.."You've increased your Defense.\n" end
+   displaythis(feedback)
+end
